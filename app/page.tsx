@@ -12,18 +12,37 @@ function LibraryPage({ type, darkMode, onBack, onNavigate }: { type: 'saved' | '
   return <main className={`satquery-app library-page${darkMode ? ' dark-mode' : ''}`}><header className="topbar"><div className="brand"><div className="brand-mark"><span /><span /><span /></div><div><strong>satquery<span>_ai</span></strong><small>SPATIAL INTELLIGENCE / Z-AXIS</small></div></div><nav className="topnav"><button onClick={onBack}>Workspace</button><button className={saved ? 'nav-active' : ''} onClick={() => onNavigate('saved')}>Saved analyses</button><button className={!saved ? 'nav-active' : ''} onClick={() => onNavigate('sources')}>Data sources</button></nav><div className="top-actions"><span className="system-status"><i /> Systems nominal</span><div className="avatar">ZA</div></div></header><section className="library-content"><div className="library-heading"><div><span className="eyebrow">SATQUERY / LIBRARY</span><h1>{saved ? 'Saved analyses' : 'Data sources'}</h1><p>{saved ? 'Reusable spatial investigations and exported results.' : 'Connected imagery, terrain, and vector datasets available to your workspace.'}</p></div><button className="new-analysis" onClick={onBack}>{saved ? 'Back to workspace' : 'Browse workspace'}</button></div><div className="library-grid">{(saved ? [{ title: 'Flood extent near Kohat', meta: 'Saved 21 Sep 2026 · 3 layers', tag: 'FLOOD MAPPING' }, { title: 'Indus floodplain monitoring', meta: 'Saved 19 Sep 2026 · 5 layers', tag: 'CHANGE DETECTION' }, { title: 'Crop stress anomaly', meta: 'Saved 18 Sep 2026 · 2 layers', tag: 'AGRICULTURE' }] : [{ title: 'Sentinel-2 L2A', meta: 'ESA Copernicus · Multispectral imagery', tag: 'CONNECTED' }, { title: 'OpenStreetMap', meta: 'Open data · Roads, settlements, boundaries', tag: 'CONNECTED' }, { title: 'SRTM Global DEM', meta: 'NASA · 30 m elevation model', tag: 'AVAILABLE' }]).map((item) => <article className="library-card" key={item.title}><div className="card-kicker">{item.tag}</div><h2>{item.title}</h2><p>{item.meta}</p><button className="card-link">{saved ? 'Open analysis' : 'View dataset'} <ArrowUpRight size={14} /></button></article>)}</div></section></main>
 }
 
+type MapMode = 'street' | 'satellite' | 'terrain'
+
+const mapModes: Record<MapMode, { label: string; source: string; tiles: string[]; attribution: string }> = {
+  street: { label: 'Street', source: 'OpenStreetMap', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], attribution: '© OpenStreetMap contributors' },
+  satellite: { label: 'Satellite', source: 'Esri World Imagery', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], attribution: 'Tiles © Esri' },
+  terrain: { label: 'Terrain', source: 'OpenTopoMap', tiles: ['https://tile.opentopomap.org/{z}/{x}/{y}.png'], attribution: '© OpenTopoMap contributors' },
+}
+
+function createMapStyle(mode: MapMode) {
+  const selected = mapModes[mode]
+  return { version: 8 as const, sources: { basemap: { type: 'raster' as const, tiles: selected.tiles, tileSize: 256, attribution: selected.attribution } }, layers: [{ id: 'basemap', type: 'raster' as const, source: 'basemap' }] }
+}
+
 function MapPanel({ compare, onCompare }: { compare: number; onCompare: (value: number) => void }) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
+  const [mode, setMode] = useState<MapMode>('street')
   const kohat = { lng: 71.445, lat: 33.586, zoom: 10.2 }
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return
-    const map = new maplibregl.Map({ container: mapContainer.current, center: [kohat.lng, kohat.lat], zoom: kohat.zoom, style: { version: 8, sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors' } }, layers: [{ id: 'osm', type: 'raster', source: 'osm' }] }, attributionControl: false })
+    const map = new maplibregl.Map({ container: mapContainer.current, center: [kohat.lng, kohat.lat], zoom: kohat.zoom, style: createMapStyle('street'), attributionControl: false })
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right')
     mapRef.current = map
     return () => { map.remove(); mapRef.current = null }
   }, [])
-  return <section className="map-panel"><div className="map-topbar"><div className="map-title"><LocateFixed size={14} /> AOI / Kohat District</div><div className="map-actions"><button aria-label="Zoom out" onClick={() => mapRef.current?.zoomOut()}><ZoomOut size={14} /></button><button aria-label="Zoom in" onClick={() => mapRef.current?.zoomIn()}><ZoomIn size={14} /></button><button aria-label="Center map" onClick={() => mapRef.current?.flyTo({ center: [kohat.lng, kohat.lat], zoom: kohat.zoom })}><Crosshair size={14} /></button></div></div><div className="map-canvas" ref={mapContainer}>{compare > 0 && <div className="compare-line" style={{ left: `${compare}%` }}><span>2024-08-14</span></div>}</div><div className="map-footer"><div className="legend"><span><i className="legend-swatch water" /> Flood extent</span><span><i className="legend-swatch boundary" /> AOI boundary</span><span><i className="legend-swatch cloud" /> Cloud mask</span></div><span className="map-source">© Sentinel-2 L2A · EPSG:4326</span></div>{compare > 0 && <div className="compare-control"><span>Before</span><input aria-label="Compare imagery dates" type="range" min="10" max="90" value={compare} onChange={(event) => onCompare(Number(event.target.value))} /><span>After</span></div>}</section>
+  function changeMode(nextMode: MapMode) {
+    setMode(nextMode)
+    const map = mapRef.current
+    if (map && nextMode !== mode) map.setStyle(createMapStyle(nextMode))
+  }
+  return <section className="map-panel"><div className="map-topbar"><div className="map-title"><LocateFixed size={14} /> AOI / Kohat District</div><div className="map-actions"><div className="map-mode-toggle" role="group" aria-label="Map mode"><span className="map-mode-label">Layers</span>{(Object.keys(mapModes) as MapMode[]).map((mapMode) => <button key={mapMode} className={mode === mapMode ? 'active' : ''} aria-pressed={mode === mapMode} onClick={() => changeMode(mapMode)}>{mapModes[mapMode].label}</button>)}</div><button aria-label="Zoom out" onClick={() => mapRef.current?.zoomOut()}><ZoomOut size={14} /></button><button aria-label="Zoom in" onClick={() => mapRef.current?.zoomIn()}><ZoomIn size={14} /></button><button aria-label="Center map" onClick={() => mapRef.current?.flyTo({ center: [kohat.lng, kohat.lat], zoom: kohat.zoom })}><Crosshair size={14} /></button></div></div><div className="map-canvas" ref={mapContainer}>{compare > 0 && <div className="compare-line" style={{ left: `${compare}%` }}><span>2024-08-14</span></div>}</div><div className="map-footer"><div className="legend"><span><i className="legend-swatch water" /> Flood extent</span><span><i className="legend-swatch boundary" /> AOI boundary</span><span><i className="legend-swatch cloud" /> Cloud mask</span></div><span className="map-source">© {mapModes[mode].source} · EPSG:4326</span></div>{compare > 0 && <div className="compare-control"><span>Before</span><input aria-label="Compare imagery dates" type="range" min="10" max="90" value={compare} onChange={(event) => onCompare(Number(event.target.value))} /><span>After</span></div>}</section>
 }
 
 export default function Page() {
