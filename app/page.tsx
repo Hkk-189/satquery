@@ -22,7 +22,7 @@ function MapPanel({ compare, onCompare }: { compare: number; onCompare: (value: 
 }
 
 export default function Page() {
-  const [query, setQuery] = useState('Show me flood extent near Kohat over the last 2 weeks')
+  const [query, setQuery] = useState('Show me flood extent near Kohat over the last 2 weeks, with the most affected river corridors and nearby settlements')
   const [submitted, setSubmitted] = useState(true)
   const [compare, setCompare] = useState(0)
   const [darkMode, setDarkMode] = useState(false)
